@@ -1,0 +1,12 @@
+{
+    "name": "and/symlink-detective",
+    "description": "Library allows to determine realpath to your script when you try to do it from symlinked file",
+    "minimum-stability": "beta",
+    "version": "0.5",
+    "authors": [
+        {
+            "name": "And",
+            "email": "and.webdev@gmail.com"
+        }
+    ]
+}
