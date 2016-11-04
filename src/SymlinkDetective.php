@@ -6,7 +6,14 @@ use Webmozart\PathUtil\Path;
 class SymlinkDetective
 {
 
-    public static function detectPath($targetPath)
+    /**
+     * @param $targetPath Path to determine real path (works not like realpath()), it's always better to pass file to
+     * this argument with unique name (to prevent of finding another file with the same name)
+     * @param string $append Add if you want get directory, even if you pas to the first arg you can do it like:
+     * (__FILE__, '/../../') and it will return directory path as result
+     * @return string
+     */
+    public static function detectPath($targetPath, $append = '')
     {
         $targetPath = Path::canonicalize($targetPath);
 
@@ -59,15 +66,33 @@ class SymlinkDetective
             throw new RuntimeException("File \"$targetPath\" is not found in path \"$initialScript\"");
         }
 
-        return $targetPath;
+//        echo "initial script - $initialScript" . PHP_EOL;
+//        echo "determine script - $targetPath" . PHP_EOL;
+//        echo "common path $commonPath" . PHP_EOL;
+//        echo "relative path $relativePath" . PHP_EOL;
+//        echo "found paths " . var_export($found, true) . PHP_EOL;
+
+        return !$append ?
+            self::chooseBestSearchResult($found) :
+            Path::canonicalize(self::chooseBestSearchResult($found) . $append);
     }
 
+    /**
+     * As there can be many found results, determine what's better
+     * @param array $found
+     * @return mixed
+     */
     protected static function chooseBestSearchResult(array $found)
     {
         // no determination yet, first is the best
         return $found[ 0 ][ 'path' ];
     }
 
+    /**
+     * Get initial script, the first executed script
+     *
+     * @return bool|string false if not found for some reason
+     */
     public static function getInitialScript()
     {
         $found = false;
@@ -107,7 +132,14 @@ class SymlinkDetective
         return $found;
     }
 
-    public function detectCommonRoots($path1, $path2)
+    /**
+     * Helper, for /var/www/site1 and /var/www/site2 common root is /var/www
+     *
+     * @param $path1
+     * @param $path2
+     * @return bool|string
+     */
+    public static function detectCommonRoots($path1, $path2)
     {
         $commonPath = $path2;
         while ($commonPath) {
