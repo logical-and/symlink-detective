@@ -1,12 +1,14 @@
 <?php
 
 
+use Webmozart\PathUtil\Path;
+
 class SymlinkDetective
 {
 
     public static function detectPath($targetPath)
     {
-        $targetPath = realpath($targetPath);
+        $targetPath = Path::canonicalize($targetPath);
 
         // Determine initial script
         if (!$initialScript = self::getInitialScript()) {
