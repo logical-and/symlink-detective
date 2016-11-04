@@ -11,9 +11,10 @@ class SymlinkDetective
      * this argument with unique name (to prevent of finding another file with the same name)
      * @param string $append Add if you want get directory, even if you pas to the first arg you can do it like:
      * (__FILE__, '/../../') and it will return directory path as result
+     * @param bool $skipNoFound If no files found just return the requested file (caution, other exceptions will be thrown)
      * @return string
      */
-    public static function detectPath($targetPath, $append = '')
+    public static function detectPath($targetPath, $append = '', $skipNoFound = true)
     {
         $targetPath = Path::canonicalize($targetPath);
 
@@ -25,7 +26,7 @@ class SymlinkDetective
         // Determine common roots now
 
         if (!$commonPath = self::detectCommonRoots($initialScript, $targetPath)) {
-            throw new RuntimeException("File \"$targetPath\" is not found in path \"$initialScript\"");
+            throw new RuntimeException("No common roots of \"$targetPath\" with path \"$initialScript\"");
         }
 
         $relativePath = ltrim(str_replace($commonPath, '', $targetPath), '\\/');
@@ -63,14 +64,19 @@ class SymlinkDetective
         }
 
         if (!$found) {
-            throw new RuntimeException("File \"$targetPath\" is not found in path \"$initialScript\"");
+            if (!$skipNoFound) {
+                throw new RuntimeException("File \"$targetPath\" is not found in path \"$initialScript\"");
+            }
+            else {
+                return !$append ? $targetPath : Path::canonicalize($targetPath . $append);
+            }
         }
 
-//        echo "initial script - $initialScript" . PHP_EOL;
-//        echo "determine script - $targetPath" . PHP_EOL;
-//        echo "common path $commonPath" . PHP_EOL;
-//        echo "relative path $relativePath" . PHP_EOL;
-//        echo "found paths " . var_export($found, true) . PHP_EOL;
+        // echo "initial script - $initialScript" . PHP_EOL;
+        // echo "determine script - $targetPath" . PHP_EOL;
+        // echo "common path $commonPath" . PHP_EOL;
+        // echo "relative path $relativePath" . PHP_EOL;
+        // echo "found paths " . var_export($found, true) . PHP_EOL;
 
         return !$append ?
             self::chooseBestSearchResult($found) :
