@@ -1,5 +1,10 @@
 # SymlinkDetective - real detective for unreal paths
 
+[![Latest Stable Version](https://poser.pugx.org/and/symlink-detective/v/stable)](https://packagist.org/packages/and/symlink-detective)
+[![Latest Unstable Version](https://poser.pugx.org/and/symlink-detective/v/unstable)](https://packagist.org/packages/and/symlink-detective)
+[![License](https://poser.pugx.org/and/symlink-detective/license)](https://packagist.org/packages/and/symlink-detective)
+[![composer.lock](https://poser.pugx.org/and/symlink-detective/composerlock)](https://packagist.org/packages/and/symlink-detective)
+
 Hey, this library is allows you to find the real path from all that mess, if you use symlinks for some directories in your project.
 Just and example:
 
