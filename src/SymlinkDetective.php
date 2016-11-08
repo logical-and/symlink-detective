@@ -7,7 +7,7 @@ class SymlinkDetective
 {
 
     /**
-     * @param $targetPath Path to determine real path (works not like realpath()), it's always better to pass file to
+     * @param string $targetPath Path to determine real path (works not like realpath()), it's always better to pass file to
      * this argument with unique name (to prevent of finding another file with the same name)
      * @param string $append Add if you want get directory, even if you pas to the first arg you can do it like:
      * (__FILE__, '/../../') and it will return directory path as result
