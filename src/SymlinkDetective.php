@@ -1,6 +1,5 @@
 <?php
 
-
 use Webmozart\PathUtil\Path;
 
 class SymlinkDetective
@@ -108,7 +107,12 @@ class SymlinkDetective
             $filename = $_SERVER[ 'SCRIPT_FILENAME' ];
 
             // Is path absolute? If so, we're done
-            if (0 === strpos($filename, DIRECTORY_SEPARATOR) and is_file($filename)
+            if (
+                // Unix
+                (0 === strpos($filename, DIRECTORY_SEPARATOR) or
+                    // Windows
+                    ('\\' == DIRECTORY_SEPARATOR and 1 === strpos($filename, ':'))
+                ) and is_file($filename)
             ) {
                 $found = $filename;
             } else {
