@@ -1,6 +1,12 @@
 <?php
 
+use SymlinkDetective\Helper;
 use Webmozart\PathUtil\Path;
+
+// Bootstrap classes
+if (!class_exists(Helper::class)) {
+    require_once __DIR__ . '/SymlinkDetective/Helper.php';
+}
 
 class SymlinkDetective
 {
@@ -15,7 +21,7 @@ class SymlinkDetective
      */
     public static function detectPath($targetPath, $append = '', $skipNoFound = true)
     {
-        $targetPath = Path::canonicalize($targetPath);
+        $targetPath = self::canonicalizePath($targetPath);
 
         // Determine initial script
         if (!$initialScript = self::getInitialScript()) {
@@ -24,18 +30,43 @@ class SymlinkDetective
 
         // Determine common roots now
 
-        if (!$commonPath = self::detectCommonRoots($initialScript, $targetPath)) {
+        if (!$commonPath = Helper::detectCommonRoots($initialScript, $targetPath)) {
             throw new RuntimeException("No common roots of \"$targetPath\" with path \"$initialScript\"");
         }
 
-        $relativePath = ltrim(str_replace($commonPath, '', $targetPath), '\\/');
+        // Determine the check method
+        $method = 1;
+        if (is_file($targetPath) or is_dir($targetPath)) {
+            $dummyFile = '.symlink-detective.' . uniqid() . '~';
+            if (is_file($targetPath)) {
+                $checkTargetPath = self::canonicalizePath(dirname($targetPath) . DIRECTORY_SEPARATOR . $dummyFile);
+                $realRelativeTargetPath = pathinfo($targetPath, PATHINFO_BASENAME);
+            }
+            else {
+                $checkTargetPath = self::canonicalizePath($targetPath . DIRECTORY_SEPARATOR . $dummyFile);
+                $realRelativeTargetPath = '';
+            }
+            touch($checkTargetPath);
+            if (is_file($checkTargetPath)) {
+                $method = 2;
+            }
+        }
+
+        if (2 == $method) {
+            /** @noinspection PhpUndefinedVariableInspection */
+            $relativePath = ltrim(str_replace($commonPath, '', $checkTargetPath), '\\/');
+        }
+        else {
+            $relativePath = ltrim(str_replace($commonPath, '', $targetPath), '\\/');
+        }
 
         // Start investigation
         // clean target from left to right, and add to initial script path which cleans from right to left, example:
         // initial script /var/www/site/public/index.php ~> /var/www/site/public ~> /var/www/site
-        // relative target path library/asset/scripts ~> library/asset ~> library/asset
+        // relative target path library/asset/scripts ~> asset/scripts ~> scripts
 
         $found              = [];
+        $foundPaths         = [];
         $relativePathSearch = $relativePath;
 
         while ($relativePathSearch) {
@@ -43,23 +74,48 @@ class SymlinkDetective
 
             while ($initialScriptSearch) {
                 // first action, since script is a file
-                $initialScriptSearch = self::shiftPathLeft($initialScriptSearch);
+                $initialScriptSearch = Helper::shiftPathLeft($initialScriptSearch);
+
+                $tryPath = self::canonicalizePath($initialScriptSearch . DIRECTORY_SEPARATOR . $relativePathSearch);
+                if (2 == $method) {
+                    /** @noinspection PhpUndefinedVariableInspection */
+                    $foundPath = self::canonicalizePath(dirname($tryPath) . DIRECTORY_SEPARATOR . $realRelativeTargetPath);
+                }
+                else {
+                    $foundPath = $tryPath;
+                }
+                if (!in_array($foundPath, $foundPaths) and (is_dir($tryPath) or is_file($tryPath))) {
+                    if (2 == $method) {
+                        $found[] = [
+                            'path'              => $foundPath,
+                            'checkPath'         => $tryPath,
+                            'relativePath'      => $relativePathSearch,
+                            'initialScriptPath' => $initialScriptSearch
+                        ];
+                    }
+                    else {
+                        $found[] = [
+                            'path'         => $tryPath,
+                            'relativePath'      => $relativePathSearch,
+                            'initialScriptPath' => $initialScriptSearch
+                        ];
+                    }
+
+                    // Do not add twice
+                    $foundPaths[] = $foundPath;
+                }
 
                 if ($initialScriptSearch == $commonPath) {
                     break;
                 }
-
-                $tryPath = $initialScriptSearch . DIRECTORY_SEPARATOR . $relativePathSearch;
-                if (is_dir($tryPath) or is_file($tryPath)) {
-                    $found[] = [
-                        'path'              => $tryPath,
-                        'relativePath'      => $relativePathSearch,
-                        'initialScriptPath' => $initialScriptSearch
-                    ];
-                }
             }
 
-            $relativePathSearch = self::shiftPathRight($relativePathSearch);
+            $relativePathSearch = Helper::shiftPathRight($relativePathSearch);
+        }
+
+        if (2 == $method) {
+            /** @noinspection PhpUndefinedVariableInspection */
+            unlink($checkTargetPath);
         }
 
         if (!$found) {
@@ -67,7 +123,7 @@ class SymlinkDetective
                 throw new RuntimeException("File \"$targetPath\" is not found in path \"$initialScript\"");
             }
             else {
-                return !$append ? $targetPath : Path::canonicalize($targetPath . $append);
+                return !$append ? $targetPath : self::canonicalizePath($targetPath . $append);
             }
         }
 
@@ -78,19 +134,58 @@ class SymlinkDetective
         // echo "found paths " . var_export($found, true) . PHP_EOL;
 
         return !$append ?
-            self::chooseBestSearchResult($found) :
-            Path::canonicalize(self::chooseBestSearchResult($found) . $append);
+            self::chooseBestSearchResult($targetPath, $found) :
+            self::canonicalizePath(self::chooseBestSearchResult($targetPath, $found) . $append);
+    }
+
+    /**
+     * Remove relative dots in path, ie `/here/is/some/path/../` would be `/here/si/some`.
+     * What's important it doesn't use realpath() function
+     * @param $path
+     * @return string
+     */
+    public static function canonicalizePath($path)
+    {
+        return Path::canonicalize($path);
     }
 
     /**
      * As there can be many found results, determine what's better
-     * @param array $found
+     *
+     * @param $targetPath
+     * @param array $foundPaths
      * @return mixed
      */
-    protected static function chooseBestSearchResult(array $found)
+    protected static function chooseBestSearchResult($targetPath, array $foundPaths)
     {
-        // no determination yet, first is the best
-        return $found[ 0 ][ 'path' ];
+        $found = null;
+        $lastRoots = null;
+        foreach ($foundPaths as $i => $result) {
+            // Init the check
+            if (!$lastRoots) {
+                $lastRoots = Helper::detectCommonRoots($targetPath, $result['path']);
+                // Only if found
+                if ($lastRoots) {
+                    $found = $i;
+                }
+            }
+            // Compare roots
+            else {
+                $commonRoots = Helper::detectCommonRoots($targetPath, $result['path']);
+                // The less similar the better
+                if ($commonRoots and strlen($commonRoots) < strlen($lastRoots)) {
+                    $lastRoots = $commonRoots;
+                    $found = $i;
+                }
+            }
+        }
+
+        if (!is_null($foundPaths[ $found ]) and !empty($foundPaths[ $found ])) {
+            return $foundPaths[ $found ][ 'path' ];
+        }
+
+        // the last resort
+        return $foundPaths[ 0 ][ 'path' ];
     }
 
     /**
@@ -140,52 +235,5 @@ class SymlinkDetective
         }
 
         return $found;
-    }
-
-    /**
-     * Helper, for /var/www/site1 and /var/www/site2 common root is /var/www
-     *
-     * @param $path1
-     * @param $path2
-     * @return bool|string
-     */
-    public static function detectCommonRoots($path1, $path2)
-    {
-        $commonPath = $path2;
-        while ($commonPath) {
-            // go to previous slash
-            $commonPath = self::shiftPathLeft($commonPath);
-
-            if ($commonPath and 0 === strpos($path1, $commonPath)) {
-                return $commonPath;
-            }
-        }
-
-        return false;
-    }
-
-    public static function shiftPathLeft($path)
-    {
-        // Cannot be shifted
-        if (false === strpos($path, '/') and false === strpos($path, '\\')) {
-            return false;
-        }
-
-        return dirname($path);
-    }
-
-    public static function shiftPathRight($path)
-    {
-        $pos = strpos($path, '/');
-        if (false === $pos) {
-            $pos = strpos($path, '\\');
-
-            if (false === $pos) {
-                // Cannot be shifted
-                return false;
-            }
-        }
-
-        return ltrim(substr($path, $pos), '\\/');
     }
 }
