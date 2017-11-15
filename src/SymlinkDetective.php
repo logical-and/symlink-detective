@@ -22,6 +22,10 @@ class SymlinkDetective
     public static function detectPath($targetPath, $append = '', $skipNoFound = true)
     {
         $targetPath = self::canonicalizePath($targetPath);
+        $targetFileSize = null;
+        if (is_file($targetPath)) {
+            $targetFileSize = filesize($targetPath);
+        }
 
         // Determine initial script
         if (!$initialScript = self::getInitialScript()) {
@@ -85,6 +89,12 @@ class SymlinkDetective
                     $foundPath = $tryPath;
                 }
                 if (!in_array($foundPath, $foundPaths) and (is_dir($tryPath) or is_file($tryPath))) {
+                    // Compare file sizes
+                    if (!is_null($targetFileSize) and is_file($tryPath) and filesize($tryPath) != $targetFileSize) {
+                        // Doesn't match, skip the file
+                        continue;
+                    }
+
                     if (2 == $method) {
                         $found[] = [
                             'path'              => $foundPath,
