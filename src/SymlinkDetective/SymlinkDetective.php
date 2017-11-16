@@ -2,6 +2,7 @@
 
 namespace SymlinkDetective;
 
+use ErrorException;
 use RuntimeException;
 use Webmozart\PathUtil\Path;
 
@@ -53,8 +54,14 @@ class SymlinkDetective
                 $realRelativeTargetPath = '';
             }
             @touch($checkTargetPath);
+            // We've got it
             if (is_file($checkTargetPath)) {
                 $method = 2;
+            }
+            // Quite difficult to debug such issues when a directory passed - it's more precise on files
+            elseif (is_dir($targetPath)) {
+                throw new ErrorException("Cannot determine symlink path for \"$targetPath\" directory, " .
+                    'the process "' . trim(`whoami`) . '" has insufficent rights to create files');
             }
         }
 
