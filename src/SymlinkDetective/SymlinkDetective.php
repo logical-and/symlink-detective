@@ -52,7 +52,7 @@ class SymlinkDetective
                 $checkTargetPath = self::canonicalizePath($targetPath . DIRECTORY_SEPARATOR . $dummyFile);
                 $realRelativeTargetPath = '';
             }
-            touch($checkTargetPath);
+            @touch($checkTargetPath);
             if (is_file($checkTargetPath)) {
                 $method = 2;
             }
